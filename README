@@ -1,0 +1,61 @@
+
+
+Setting up the database:
+
+  paul@saffron:~$ sudo -s
+  root@saffron:~# su postgres
+  postgres@saffron:/home/paul$ psql 
+  psql (8.4.5)
+  Type "help" for help.
+  postgres=# create user vegans with password 'local_login_password';
+  CREATE ROLE
+  postgres=# create database rbv;
+  CREATE DATABASE
+  postgres=# grant all privileges on database rbv to vegans;
+  GRANT
+
+
+Setting up mail:
+
+  Set up Haskell:
+    $ sudo cabal update
+    $ sudo cabal install haskelldb-hdbc-postgresql
+    $ sudo cabal install regex-pcre
+    $ sudo cabal install time
+
+  Compile:
+    $ ghc --make 
+
+
+  Set up Perl:
+    $ sudo cpan
+    
+    Then:
+      > install DBI
+      > install DBD::Pg
+      > install Email::Address
+  
+  Install postfix:
+    $ sudo apt-get install postfix
+
+  Add to /etc/postfix/main.cf:
+    virtual_alias_maps = hash:/etc/postfix/virtual
+
+  Create /etc/postfix/virtual with the contents:
+    postmaster@saffron admin
+    postmaster@september.endoftheinternet.org admin
+    admin@saffron admin
+    admin@september.endoftheinternet.org admin
+
+    @september.endoftheinternet.org reminded_by_vegans
+    @saffron reminded_by_vegans
+
+  Add to /etc/aliases:
+    reminded_by_vegans: |/home/paul/src/reminded_by_vegans/receive_mail.pl
+  
+  Notify Postfix:
+    $ sudo postmap /etc/postfix/virtual
+    $ sudo postalias /etc/alias
+    $ sudo /etc/init.d/postfix restart
+
+  
