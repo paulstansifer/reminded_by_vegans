@@ -24,6 +24,7 @@ create table ticket (
 create table reminder (
        rid serial               primary key,
        uid serial               not null references usr,
+       --subject text           not null,
        message text             not null,
        when_to_send timestamp   not null,
        sent boolean             not null

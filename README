@@ -18,10 +18,14 @@ Setting up the database:
 Setting up mail:
 
   Set up Haskell:
-    $ sudo cabal update
-    $ sudo cabal install haskelldb-hdbc-postgresql
-    $ sudo cabal install regex-pcre
-    $ sudo cabal install time
+    $ export PATH="$HOME/.cabal/bin:$PATH"
+    $ cabal update
+    $ cabal install haskelldb-hdbc-postgresql
+    $ cabal install regex-pcre
+    $ cabal install time
+    $ cabal install happstack
+    $ cabal install happstack-util
+
 
   Compile:
     $ ghc --make 
@@ -40,6 +44,8 @@ Setting up mail:
 
   Add to /etc/postfix/main.cf:
     virtual_alias_maps = hash:/etc/postfix/virtual
+  Also, add the hostnames people will use to mail this machine to 'mydestination'.
+
 
   Create /etc/postfix/virtual with the contents:
     postmaster@saffron admin
