@@ -33,9 +33,11 @@ main = do
 
 remindersPage (Username name)  = do
   val <- liftIO $ do
-    c <- connectPostgresSQL "host=localhost dbname=rbv user=vegans password=local_login_password"
+    c <- connectPostgreSQL "host=localhost dbname=rbv user=vegans password=local_login_password"
     
     print "hi!"
     print "hihi!"
-    quickQuery' c "SELECT * FROM usr" []
+    v <- quickQuery' c "SELECT * FROM usr" []
+    return $ fromSql $ head $ head $ v
+
   ok $ "Hi, " ++ name ++ "<br>" ++ val
