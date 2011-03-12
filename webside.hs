@@ -1,22 +1,31 @@
 {-# LANGUAGE OverloadedStrings #-}
-
 module Main where
 
 import Database.HDBC
 import Database.HDBC.SqlValue
 import Database.HDBC.PostgreSQL (connectPostgreSQL, Connection)
-import Happstack.Server (nullConf, simpleHTTP, ok, dir, FromReqURI(..), path, ServerPart, Response, toResponse)
-import Happstack.Server.SimpleHTTP (ServerPartT)
-
-import Control.Monad
-import Control.Monad.Trans (liftIO)
-
-
+import Happstack.Server (nullConf, simpleHTTP, ok, notFound, dir, FromReqURI(..), path, ServerPart, Response, toResponse)
+import Happstack.Server.Monads (ServerPartT)
 
 import           Text.Blaze ((!), toHtml)
 import qualified Text.Blaze.Html4.Strict as H
 import qualified Text.Blaze.Html4.Strict.Attributes as A
 
+import Data.Time
+
+import Control.Monad
+import Control.Monad.Trans (liftIO)
+
+import Maybe (listToMaybe)
+
+day :: ZonedTime -> Day
+day (ZonedTime (LocalTime d t) tz) = d
+
+daysDiffThere :: ZonedTime -> ZonedTime -> Integer
+daysDiffThere timeHere (ZonedTime (LocalTime d t) there) = 
+  let now = zonedTimeToUTC timeHere
+      ZonedTime (LocalTime dayThere timeThere) _ = utcToZonedTime there now
+  in diffDays d dayThere
 
 --from the BlazeHtml tutorial
 appTemplate :: String  -> H.Html -> H.Html
@@ -29,23 +38,54 @@ appTemplate title body =
       body
 
 newtype Username = Username String
+newtype UID = UID Int
+              deriving (Show)
+newtype RID = RID Int
+              deriving (Show)
+data Reminder = Reminder RID UID {-String-} String ZonedTime Bool 
+              deriving (Show)
+data ReminderInTime = ReminderInTime Reminder Integer
 
+{- Query-related things -}
+
+
+uidByEmail :: Connection -> String -> IO (Maybe UID)
+uidByEmail c email = do
+  r <- quickQuery' c "SELECT uid FROM usr WHERE email=?" [toSql (email :: String)]
+  return $ listToMaybe $ map (UID . fromSql . head) r
+  
+getReminderInTime timeHere [rid, uid, body, when, sent] = 
+  ReminderInTime 
+    (Reminder (RID $ fromSql rid) (UID $ fromSql uid) (fromSql body) (fromSql when) (fromSql sent))
+    (daysDiffThere timeHere (fromSql when))
+
+upcomingRemindersByUid :: Connection -> UID -> IO [ReminderInTime]
+upcomingRemindersByUid c (UID uidInt)  = do  
+  timeHere <- getZonedTime
+  r <- quickQuery' c "SELECT rid, uid, message, when_to_send, sent FROM reminder WHERE uid=? AND NOT sent" [toSql uidInt]
+  return $ map (getReminderInTime timeHere) r
+
+
+
+{- Serving -}
 
 instance FromReqURI Username where
   fromReqURI name = Just $ Username name
 
 
-userPage :: String -> (Int -> Connection -> ServerPartT IO Response) -> ServerPartT IO Response
+
+userPage :: String -> (UID -> Connection -> ServerPartT IO Response) -> ServerPartT IO Response
 userPage pageName fn = dir "user" $ path $ \name -> dir pageName $ do
-  (c, uid) <- liftIO $ do
+  (c, possiblyUid) <- liftIO $ do
     c <- connectPostgreSQL "host=localhost dbname=rbv user=vegans password=local_login_password"
-    v <- quickQuery' c "SELECT uid FROM usr WHERE email=?" [toSql (name :: String)]
-    print $ show v
-    [[uid]] <- quickQuery' c "SELECT uid FROM usr WHERE email=?" [toSql (name :: String)]
+
+    possiblyUid <- uidByEmail c name
     
-    return (c, fromSql uid)
+    return (c, possiblyUid)
   
-  fn uid $ c
+  case possiblyUid of
+    Nothing -> notFound $ toResponse $ appTemplate "No such user" $ H.p $ "That user doesn't exist."
+    Just uid -> fn uid $ c
 
 main :: IO ()
 main =
@@ -58,16 +98,18 @@ main =
     ]
 
 
+renderReminderRow :: [Integer] -> [ReminderInTime] -> H.Html
+renderReminderRow range reminders = 
+  H.tr $ forM_ range $ \dayDiff ->
+    H.td $ forM_ (filter (\(ReminderInTime (Reminder _ _ _ _ sent) itsDayDiff) -> (not sent) && itsDayDiff == dayDiff) reminders) $
+      \(ReminderInTime (Reminder _ _ body when sent) _) -> H.string $ body
 
 
-remindersPage :: Int -> Connection -> ServerPartT IO Response
+remindersPage :: UID -> Connection -> ServerPartT IO Response
 remindersPage uid c = do
   val <- liftIO $ do
-    
-    print "hi!"
-    v <- quickQuery' c "SELECT * FROM reminder WHERE uid=?" [toSql uid]
-    return $ toResponse $ appTemplate "Reminders" $ H.p $ toHtml $ show v
-
-
-
+    reminders <- upcomingRemindersByUid c uid
+    return $ toResponse $ appTemplate "Reminders" $ H.table $ do
+      renderReminderRow [0 .. 2] reminders
+      renderReminderRow [3 .. 6] reminders
   ok val 

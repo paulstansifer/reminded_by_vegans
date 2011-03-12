@@ -6,7 +6,7 @@ import Database.HDBC.PostgreSQL (connectPostgreSQL)
 import qualified Text.Regex as RE
 import Data.Time
 
-import Happstack.Util.Mail
+--import Happstack.Util.Mail
 
 isoDate = RE.mkRegex "([0-9]{4})[-]([0-9]{2})[-]([0-9]{2})"
 
@@ -48,7 +48,7 @@ main =
             )
     readMail
     
-    
+    {-
     let sendReminders = 
           withTransaction c (
             \c -> do
@@ -65,7 +65,8 @@ main =
                   quickQuery' c "DELETE FROM reminder WHERE rid=?" [rid]
                   sendReminders)
     sendReminders
-    
+    -}
+
     disconnect c
     
     return ()

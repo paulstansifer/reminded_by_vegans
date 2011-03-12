@@ -26,7 +26,7 @@ create table reminder (
        uid serial               not null references usr,
        --subject text           not null,
        message text             not null,
-       when_to_send timestamp   not null,
+       when_to_send timestamp with time zone not null,
        sent boolean             not null
 );
 create index reminder_by_when_to_send on reminder(when_to_send);

@@ -1,6 +1,7 @@
-for i in `seq 7`; do
+for i in `seq 9`; do
 
-    echo "2011-01-2$i" | mail rbv -s "test-message $i" 
+    echo "2011-03-0$i" | mail rbv -s "test-message $i" 
+    echo "2011-03-1$i" | mail rbv -s "test-message $i" 
 
 done
 
