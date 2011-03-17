@@ -1,50 +1,23 @@
-{-# LANGUAGE OverloadedStrings #-}
 module Main where
+
+import qualified Render 
+import Veganism
 
 import Database.HDBC
 import Database.HDBC.SqlValue
 import Database.HDBC.PostgreSQL (connectPostgreSQL, Connection)
-import Happstack.Server (nullConf, simpleHTTP, ok, notFound, dir, FromReqURI(..), path, ServerPart, Response, toResponse)
+import Happstack.Server (nullConf, simpleHTTP, ok, notFound, dir, FromReqURI(..), path, ServerPart, Response, toResponse, Browsing(DisableBrowsing), serveDirectory)
 import Happstack.Server.Monads (ServerPartT)
 
-import           Text.Blaze ((!), toHtml)
-import qualified Text.Blaze.Html4.Strict as H
-import qualified Text.Blaze.Html4.Strict.Attributes as A
 
-import Data.Time
 
 import Control.Monad
 import Control.Monad.Trans (liftIO)
 
 import Maybe (listToMaybe)
 
-day :: ZonedTime -> Day
-day (ZonedTime (LocalTime d t) tz) = d
 
-daysDiffThere :: ZonedTime -> ZonedTime -> Integer
-daysDiffThere timeHere (ZonedTime (LocalTime d t) there) = 
-  let now = zonedTimeToUTC timeHere
-      ZonedTime (LocalTime dayThere timeThere) _ = utcToZonedTime there now
-  in diffDays d dayThere
 
---from the BlazeHtml tutorial
-appTemplate :: String  -> H.Html -> H.Html
-appTemplate title body =
-  H.html $ do
-    H.head $ do
-      H.title (H.string $ title ++ " - Reminded by Vegans")
-      H.meta ! A.httpEquiv "Content-Type" ! A.content "text/html;charset=utf-8"
-    H.body $ do
-      body
-
-newtype Username = Username String
-newtype UID = UID Int
-              deriving (Show)
-newtype RID = RID Int
-              deriving (Show)
-data Reminder = Reminder RID UID {-String-} String ZonedTime Bool 
-              deriving (Show)
-data ReminderInTime = ReminderInTime Reminder Integer
 
 {- Query-related things -}
 
@@ -54,16 +27,14 @@ uidByEmail c email = do
   r <- quickQuery' c "SELECT uid FROM usr WHERE email=?" [toSql (email :: String)]
   return $ listToMaybe $ map (UID . fromSql . head) r
   
-getReminderInTime timeHere [rid, uid, body, when, sent] = 
-  ReminderInTime 
-    (Reminder (RID $ fromSql rid) (UID $ fromSql uid) (fromSql body) (fromSql when) (fromSql sent))
-    (daysDiffThere timeHere (fromSql when))
+getReminder [rid, uid, body, when, sent] = 
+  Reminder (RID $ fromSql rid) (UID $ fromSql uid) (fromSql body) (fromSql when) (fromSql sent)
 
-upcomingRemindersByUid :: Connection -> UID -> IO [ReminderInTime]
+upcomingRemindersByUid :: Connection -> UID -> IO [Reminder]
 upcomingRemindersByUid c (UID uidInt)  = do  
   timeHere <- getZonedTime
   r <- quickQuery' c "SELECT rid, uid, message, when_to_send, sent FROM reminder WHERE uid=? AND NOT sent" [toSql uidInt]
-  return $ map (getReminderInTime timeHere) r
+  return $ map getReminder r
 
 
 
@@ -84,32 +55,30 @@ userPage pageName fn = dir "user" $ path $ \name -> dir pageName $ do
     return (c, possiblyUid)
   
   case possiblyUid of
-    Nothing -> notFound $ toResponse $ appTemplate "No such user" $ H.p $ "That user doesn't exist."
+    Nothing -> notFound $ toResponse $ Render.error "No such user" "That user doesn't exist."
     Just uid -> fn uid $ c
 
 main :: IO ()
-main =
+main = do
+  print "ready"
   simpleHTTP nullConf $ msum
-    [ mzero,
-      userPage "reminders" remindersPage -- \(Username name) -> ok $ "Hi, " ++ name
+    [ mzero
+    , userPage "reminders" remindersPage -- \(Username name) -> ok $ "Hi, " ++ name
+    , dir "static" $ serveDirectory DisableBrowsing [] "./static"
       --dir "user" $ path $ \(Username name) -> ok $ "Hi" ++ name
       --dir "reminders_by_date" $ ok "Reminders by date",
       --dir "other" $ ok "Other" 
     ]
 
-
-renderReminderRow :: [Integer] -> [ReminderInTime] -> H.Html
-renderReminderRow range reminders = 
-  H.tr $ forM_ range $ \dayDiff ->
-    H.td $ forM_ (filter (\(ReminderInTime (Reminder _ _ _ _ sent) itsDayDiff) -> (not sent) && itsDayDiff == dayDiff) reminders) $
-      \(ReminderInTime (Reminder _ _ body when sent) _) -> H.string $ body
-
-
+ 
 remindersPage :: UID -> Connection -> ServerPartT IO Response
 remindersPage uid c = do
-  val <- liftIO $ do
+  val <- liftIO $ do 
+    now <- getZonedTime -- TODO: respect user's timezone
+    let today = dayOf now
     reminders <- upcomingRemindersByUid c uid
-    return $ toResponse $ appTemplate "Reminders" $ H.table $ do
-      renderReminderRow [0 .. 2] reminders
-      renderReminderRow [3 .. 6] reminders
+    return $ toResponse $ Render.remindersPage today reminders
   ok val 
+
+  
+  

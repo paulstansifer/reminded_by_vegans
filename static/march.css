@@ -1,0 +1,46 @@
+body {
+   font-family: "Georgia", serif;
+}
+
+.day {
+   list-style-type: none; /* hack -- find a way not to need this for empty lists */
+   border: 1px #D0D0FF solid;
+   height: 15ex;
+}
+
+.row {
+   width: 100%;
+}
+
+.remlist{
+   list-style-type: none;
+   margin: 0;
+   padding: 0;
+}
+
+.rem {
+}
+.empty-rem {
+   opacity: 0.3;
+}
+.placeholder-rem{
+   height: 2ex;
+   background-color: gray;
+   border: 3px red solid;
+}
+
+td {
+   vertical-align: top;
+}
+
+
+
+form{
+   display: inline;
+}
+
+input {
+   border: 0px;
+   border-bottom: 1px black solid;
+   width: 80%;
+}
